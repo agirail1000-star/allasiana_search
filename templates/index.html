@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>아시아나 마일리지 좌석 조회</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+    .container { max-width: 920px; margin: 0 auto; }
+
+    /* ── 헤더 ── */
+    header {
+      background: linear-gradient(135deg, #003087 0%, #0057b8 100%);
+      color: #fff;
+      border-radius: 14px;
+      padding: 20px 28px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    header .logo { font-size: 1.9rem; }
+    header h1 { font-size: 1.3rem; font-weight: 700; }
+    header p  { font-size: .8rem; opacity: .8; margin-top: 3px; }
+
+    /* 세션 상태 배지 */
+    .session-badge {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,.15);
+      border-radius: 99px;
+      padding: 6px 14px;
+      font-size: .82rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .session-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #a0aec0;
+      flex-shrink: 0;
+    }
+    .session-dot.on  { background: #68d391; box-shadow: 0 0 6px #68d391; }
+    .session-dot.wait{ background: #f6ad55; box-shadow: 0 0 6px #f6ad55; animation: blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ── 카드 ── */
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px 22px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07);
+    }
+    .card h2 {
+      font-size: .93rem; font-weight: 700; color: #003087;
+      margin-bottom: 14px; padding-bottom: 9px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    /* ── 폼 ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 640px) { .form-grid { grid-template-columns: 1fr 1fr; } }
+
+    .form-group { position: relative; }
+    .form-group label {
+      display: block; font-size: .78rem; font-weight: 600;
+      color: #4a5568; margin-bottom: 5px;
+    }
+    .form-group input {
+      width: 100%; padding: 9px 12px;
+      border: 1.5px solid #cbd5e0; border-radius: 8px;
+      font-size: .92rem; transition: border-color .2s;
+      background: #fff;
+    }
+    .form-group input:focus {
+      outline: none; border-color: #0057b8;
+      box-shadow: 0 0 0 3px rgba(0,87,184,.1);
+    }
+    .form-group input:disabled { background: #f7fafc; color: #a0aec0; cursor: not-allowed; }
+
+    /* ── 공항 검색 드롭다운 ── */
+    .airport-wrap { position: relative; }
+    .airport-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0; right: 0;
+      background: #fff;
+      border: 1.5px solid #0057b8;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.12);
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 999;
+    }
+    .airport-dropdown.open { display: block; }
+    .airport-item {
+      padding: 9px 12px;
+      cursor: pointer;
+      font-size: .87rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid #f0f4f8;
+    }
+    .airport-item:last-child { border-bottom: none; }
+    .airport-item:hover, .airport-item.active { background: #ebf4ff; }
+    .airport-code {
+      font-weight: 700; color: #003087;
+      background: #e8f0fe; border-radius: 5px;
+      padding: 1px 7px; font-size: .8rem;
+      flex-shrink: 0; min-width: 38px; text-align: center;
+    }
+    .airport-info { display: flex; flex-direction: column; }
+    .airport-name { font-weight: 600; font-size: .86rem; }
+    .airport-sub  { font-size: .75rem; color: #718096; }
+    .no-result    { padding: 12px; text-align: center; color: #a0aec0; font-size: .85rem; }
+
+    /* ── 버튼 ── */
+    .btn-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 18px; border: none; border-radius: 8px;
+      font-size: .88rem; font-weight: 700; cursor: pointer;
+      transition: background .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .btn-primary { background: #003087; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #0057b8; }
+    .btn-cancel  { background: #744210; color: #fff; }
+    .btn-cancel:hover:not(:disabled)  { background: #92400e; }
+    .btn-open    { background: #2f855a; color: #fff; }
+    .btn-open:hover:not(:disabled)    { background: #276749; }
+    .btn-quit    { background: #c53030; color: #fff; }
+    .btn-quit:hover:not(:disabled)    { background: #9b2c2c; }
+    .btn-gray    { background: #718096; color: #fff; }
+    .btn-gray:hover:not(:disabled)    { background: #4a5568; }
+    .btn-dl      { background: #e53e3e; color: #fff; }
+    .btn-dl:hover { background: #c53030; }
+
+    /* ── 로그인 배너 ── */
+    #loginBanner {
+      display: none;
+      background: #fffbeb; border: 2px solid #f6ad55;
+      border-radius: 10px; padding: 14px 18px; margin-bottom: 14px;
+      align-items: center; gap: 14px; flex-wrap: wrap;
+    }
+    #loginBanner .icon { font-size: 1.5rem; }
+    #loginBanner .msg  { flex: 1; }
+    #loginBanner .msg strong { display: block; margin-bottom: 3px; }
+    #loginBanner .msg span   { font-size: .82rem; color: #744210; }
+
+    /* ── 진행 ── */
+    #progressWrap { display: none; }
+    .progress-label { display:flex; justify-content:space-between; font-size:.78rem; color:#4a5568; margin-bottom:5px; }
+    .progress-bar-bg { background:#e2e8f0; border-radius:99px; height:11px; overflow:hidden; }
+    .progress-bar-fill {
+      height:100%;
+      background: linear-gradient(90deg, #003087, #0057b8);
+      border-radius:99px; transition:width .4s ease; width:0%;
+    }
+
+    /* ── 로그 ── */
+    #logBox {
+      display: none;
+      background: #1a202c; color: #a0aec0;
+      border-radius: 10px; padding: 11px 14px;
+      font-family: 'Consolas', monospace; font-size: .79rem;
+      max-height: 160px; overflow-y: auto; margin-bottom: 14px;
+    }
+    .log-line { margin-bottom: 2px; }
+    .log-ok   { color: #68d391; }
+    .log-err  { color: #fc8181; }
+    .log-info { color: #63b3ed; }
+    .log-warn { color: #f6ad55; }
+
+    /* ── 결과 ── */
+    #resultWrap { display: none; }
+    .table-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+    .badge { background:#003087; color:#fff; border-radius:99px; padding:2px 11px; font-size:.75rem; font-weight:700; }
+    .table-scroll { overflow-x: auto; }
+    table { width:100%; border-collapse:collapse; font-size:.85rem; }
+    thead tr { background:#003087; color:#fff; }
+    thead th { padding:9px 12px; text-align:center; font-weight:600; white-space:nowrap; }
+    tbody tr:nth-child(even) { background:#f7fafc; }
+    tbody tr:hover { background:#ebf4ff; }
+    tbody td { padding:8px 12px; text-align:center; border-bottom:1px solid #e2e8f0; white-space:nowrap; }
+    .seat-o   { color:#276749; font-weight:800; font-size:1rem; }
+    .seat-x   { color:#a0aec0; }
+    .seat-dash{ color:#e2e8f0; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- 헤더 -->
+  <header>
+    <div class="header-left">
+      <div class="logo">✈</div>
+      <div>
+        <h1>아시아나 마일리지 좌석 조회</h1>
+        <p>로그인 한 번 → 여러 노선 연속 조회 가능</p>
+      </div>
+    </div>
+    <div class="session-badge">
+      <div class="session-dot" id="sessionDot"></div>
+      <span id="sessionLabel">세션 없음</span>
+    </div>
+  </header>
+
+  <!-- 세션 컨트롤 -->
+  <div class="card">
+    <h2>세션 관리</h2>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <button id="btnOpenBrowser" class="btn btn-open" onclick="openBrowser()">
+        🌐 브라우저 열기 / 로그인
+      </button>
+      <button id="btnQuit" class="btn btn-quit" onclick="quitBrowser()" disabled>
+        ⏹ 세션 종료
+      </button>
+      <span id="sessionHint" style="font-size:.82rem; color:#718096;">
+        브라우저를 열고 아시아나에 로그인하면 여러 노선을 연속으로 조회할 수 있습니다.
+      </span>
+    </div>
+  </div>
+
+  <!-- 로그인 배너 -->
+  <div id="loginBanner">
+    <div class="icon">🔐</div>
+    <div class="msg">
+      <strong>Chrome 창에서 아시아나 회원 로그인을 완료해 주세요</strong>
+      <span>flyasiana.com 에서 로그인 후 아래 버튼을 클릭하면 조회가 활성화됩니다</span>
+    </div>
+    <button class="btn btn-open" onclick="loginComplete()">✔ 로그인 완료</button>
+  </div>
+
+  <!-- 조회 설정 -->
+  <div class="card">
+    <h2>조회 설정</h2>
+    <div class="form-grid">
+      <div class="form-group airport-wrap">
+        <label>출발지</label>
+        <input id="originInput" type="text" placeholder="ICN, 인천, Tokyo..." autocomplete="off"
+               oninput="filterAirports('origin')" onfocus="filterAirports('origin')"
+               onkeydown="navDropdown(event,'origin')" />
+        <input type="hidden" id="originCode" />
+        <div class="airport-dropdown" id="originDrop"></div>
+      </div>
+      <div class="form-group airport-wrap">
+        <label>도착지</label>
+        <input id="destInput" type="text" placeholder="NRT, 나리타, Osaka..." autocomplete="off"
+               oninput="filterAirports('dest')" onfocus="filterAirports('dest')"
+               onkeydown="navDropdown(event,'dest')" />
+        <input type="hidden" id="destCode" />
+        <div class="airport-dropdown" id="destDrop"></div>
+      </div>
+      <div class="form-group">
+        <label>시작 날짜</label>
+        <input id="startDate" type="date" value="2026-07-01" />
+      </div>
+      <div class="form-group">
+        <label>종료 날짜</label>
+        <input id="endDate" type="date" value="2026-07-31" />
+      </div>
+    </div>
+    <div class="btn-row">
+      <button id="startBtn" class="btn btn-primary" onclick="startSearch()" disabled>▶ 조회 시작</button>
+      <button id="cancelBtn" class="btn btn-cancel" onclick="cancelSearch()" style="display:none">■ 조회 취소</button>
+    </div>
+  </div>
+
+  <!-- 진행 -->
+  <div id="progressWrap" class="card" style="padding:16px 22px;">
+    <div class="progress-label">
+      <span id="progressText">준비 중...</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progressFill"></div>
+    </div>
+  </div>
+
+  <!-- 로그 -->
+  <div id="logBox"></div>
+
+  <!-- 결과 -->
+  <div id="resultWrap" class="card">
+    <div class="table-header">
+      <h2 style="margin:0;border:none;padding:0;">조회 결과</h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span class="badge" id="resultCount">0건</span>
+        <button class="btn btn-dl" onclick="downloadCsv()">⬇ CSV 다운로드</button>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>날짜</th><th>출발</th><th>도착</th>
+            <th>항공편</th><th>출발시간</th>
+            <th>이코노미</th><th>비즈니스</th><th>비즈니스 승급</th>
+          </tr>
+        </thead>
+        <tbody id="resultBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ── 공항 데이터 ───────────────────────────────────────────────────────────────
+const AIRPORTS = [
+  {code:"ICN", name:"인천국제공항", city:"서울/인천", en:"Seoul Incheon"},
+  {code:"GMP", name:"김포국제공항", city:"서울/김포", en:"Seoul Gimpo"},
+  {code:"NRT", name:"나리타국제공항", city:"도쿄/나리타", en:"Tokyo Narita"},
+  {code:"HND", name:"하네다공항", city:"도쿄/하네다", en:"Tokyo Haneda"},
+  {code:"KIX", name:"간사이국제공항", city:"오사카", en:"Osaka Kansai"},
+  {code:"ITM", name:"이타미공항", city:"오사카/이타미", en:"Osaka Itami"},
+  {code:"NGO", name:"중부국제공항", city:"나고야", en:"Nagoya Centrair"},
+  {code:"FUK", name:"후쿠오카공항", city:"후쿠오카", en:"Fukuoka"},
+  {code:"CTS", name:"신치토세공항", city:"삿포로", en:"Sapporo Chitose"},
+  {code:"OKA", name:"나하공항", city:"오키나와", en:"Okinawa Naha"},
+  {code:"HIJ", name:"히로시마공항", city:"히로시마", en:"Hiroshima"},
+  {code:"SDJ", name:"센다이공항", city:"센다이", en:"Sendai"},
+  {code:"JFK", name:"존F케네디국제공항", city:"뉴욕", en:"New York JFK"},
+  {code:"LAX", name:"로스앤젤레스국제공항", city:"LA", en:"Los Angeles"},
+  {code:"SFO", name:"샌프란시스코국제공항", city:"샌프란시스코", en:"San Francisco"},
+  {code:"ORD", name:"오헤어국제공항", city:"시카고", en:"Chicago O'Hare"},
+  {code:"SEA", name:"시애틀타코마국제공항", city:"시애틀", en:"Seattle Tacoma"},
+  {code:"HNL", name:"호놀룰루국제공항", city:"호놀룰루", en:"Honolulu"},
+  {code:"FRA", name:"프랑크푸르트국제공항", city:"프랑크푸르트", en:"Frankfurt"},
+  {code:"LHR", name:"히스로공항", city:"런던", en:"London Heathrow"},
+  {code:"CDG", name:"샤를드골국제공항", city:"파리", en:"Paris CDG"},
+  {code:"AMS", name:"스키폴국제공항", city:"암스테르담", en:"Amsterdam Schiphol"},
+  {code:"VIE", name:"빈국제공항", city:"빈", en:"Vienna"},
+  {code:"ZRH", name:"취리히공항", city:"취리히", en:"Zurich"},
+  {code:"HKG", name:"홍콩국제공항", city:"홍콩", en:"Hong Kong"},
+  {code:"SIN", name:"창이국제공항", city:"싱가포르", en:"Singapore Changi"},
+  {code:"BKK", name:"수완나품국제공항", city:"방콕", en:"Bangkok Suvarnabhumi"},
+  {code:"MNL", name:"니노이아키노국제공항", city:"마닐라", en:"Manila"},
+  {code:"PVG", name:"푸동국제공항", city:"상하이", en:"Shanghai Pudong"},
+  {code:"PEK", name:"베이징수도국제공항", city:"베이징", en:"Beijing Capital"},
+  {code:"CAN", name:"바이윈국제공항", city:"광저우", en:"Guangzhou Baiyun"},
+  {code:"SYD", name:"킹스포드스미스국제공항", city:"시드니", en:"Sydney"},
+  {code:"MEL", name:"멜버른공항", city:"멜버른", en:"Melbourne"},
+  {code:"DEL", name:"인디라간디국제공항", city:"뉴델리", en:"New Delhi"},
+  {code:"DXB", name:"두바이국제공항", city:"두바이", en:"Dubai"},
+  {code:"TPE", name:"타오위안국제공항", city:"타이페이", en:"Taipei Taoyuan"},
+  {code:"KUL", name:"쿠알라룸푸르국제공항", city:"쿠알라룸푸르", en:"Kuala Lumpur"},
+  {code:"CGK", name:"수카르노하타국제공항", city:"자카르타", en:"Jakarta"},
+  {code:"SGN", name:"떤선녓국제공항", city:"호치민", en:"Ho Chi Minh"},
+  {code:"HAN", name:"노이바이국제공항", city:"하노이", en:"Hanoi"},
+];
+
+// ── 공항 검색 ─────────────────────────────────────────────────────────────────
+let dropActive = {origin: -1, dest: -1};
+
+function filterAirports(field) {
+  const inputEl = document.getElementById(field === 'origin' ? 'originInput' : 'destInput');
+  const drop    = document.getElementById(field === 'origin' ? 'originDrop' : 'destDrop');
+  const q       = inputEl.value.trim().toLowerCase();
+
+  const matched = q.length === 0 ? AIRPORTS : AIRPORTS.filter(a =>
+    a.code.toLowerCase().includes(q) ||
+    a.name.includes(q) ||
+    a.city.includes(q) ||
+    a.en.toLowerCase().includes(q)
+  );
+
+  if (matched.length === 0) {
+    drop.innerHTML = '<div class="no-result">검색 결과 없음</div>';
+  } else {
+    drop.innerHTML = matched.map((a, i) => `
+      <div class="airport-item" data-code="${a.code}" data-idx="${i}"
+           onmousedown="selectAirport('${field}','${a.code}','${a.city} (${a.code})')">
+        <span class="airport-code">${a.code}</span>
+        <span class="airport-info">
+          <span class="airport-name">${a.city}</span>
+          <span class="airport-sub">${a.name}</span>
+        </span>
+      </div>`).join('');
+  }
+  drop.classList.add('open');
+  dropActive[field] = -1;
+}
+
+function selectAirport(field, code, label) {
+  document.getElementById(field === 'origin' ? 'originInput' : 'destInput').value = label;
+  document.getElementById(field === 'origin' ? 'originCode' : 'destCode').value = code;
+  document.getElementById(field === 'origin' ? 'originDrop' : 'destDrop').classList.remove('open');
+}
+
+function navDropdown(e, field) {
+  const drop  = document.getElementById(field === 'origin' ? 'originDrop' : 'destDrop');
+  const items = drop.querySelectorAll('.airport-item');
+  if (!items.length) return;
+  let idx = dropActive[field];
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    idx = Math.min(idx + 1, items.length - 1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    idx = Math.max(idx - 1, 0);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (idx >= 0) items[idx].dispatchEvent(new MouseEvent('mousedown'));
+    else if (items.length > 0) items[0].dispatchEvent(new MouseEvent('mousedown'));
+    return;
+  } else if (e.key === 'Escape') {
+    drop.classList.remove('open');
+    return;
+  } else { return; }
+
+  items.forEach(el => el.classList.remove('active'));
+  items[idx].classList.add('active');
+  items[idx].scrollIntoView({block: 'nearest'});
+  dropActive[field] = idx;
+}
+
+// 드롭다운 외부 클릭 시 닫기
+document.addEventListener('click', e => {
+  ['origin','dest'].forEach(f => {
+    const wrap = document.querySelector(`.airport-wrap:has(#${f === 'origin' ? 'originInput' : 'destInput'})`);
+    if (wrap && !wrap.contains(e.target)) {
+      document.getElementById(f === 'origin' ? 'originDrop' : 'destDrop').classList.remove('open');
+    }
+  });
+});
+
+// ── 세션 상태 ──────────────────────────────────────────────────────────────────
+let sessionState = 'idle'; // idle | login_wait | ready | searching
+let es = null;
+let rowCount = 0;
+
+function setSessionState(state) {
+  sessionState = state;
+  const dot   = document.getElementById('sessionDot');
+  const label = document.getElementById('sessionLabel');
+  const hint  = document.getElementById('sessionHint');
+  const btnOpen = document.getElementById('btnOpenBrowser');
+  const btnQuit = document.getElementById('btnQuit');
+  const startBtn = document.getElementById('startBtn');
+
+  dot.className = 'session-dot';
+  if (state === 'idle') {
+    label.textContent = '세션 없음';
+    hint.textContent  = '브라우저를 열고 아시아나에 로그인하면 여러 노선을 연속으로 조회할 수 있습니다.';
+    btnOpen.disabled  = false;
+    btnQuit.disabled  = true;
+    startBtn.disabled = true;
+  } else if (state === 'login_wait') {
+    dot.classList.add('wait');
+    label.textContent = '로그인 대기 중';
+    hint.textContent  = 'Chrome 창에서 로그인 후 "로그인 완료" 버튼을 눌러주세요.';
+    btnOpen.disabled  = true;
+    btnQuit.disabled  = false;
+    startBtn.disabled = true;
+  } else if (state === 'ready') {
+    dot.classList.add('on');
+    label.textContent = '세션 활성';
+    hint.textContent  = '조회 설정을 입력하고 "조회 시작"을 누르세요. 조회 후 다른 노선도 바로 조회할 수 있습니다.';
+    btnOpen.disabled  = true;
+    btnQuit.disabled  = false;
+    startBtn.disabled = false;
+  } else if (state === 'searching') {
+    dot.classList.add('on');
+    label.textContent = '조회 중';
+    hint.textContent  = '조회가 진행 중입니다...';
+    btnOpen.disabled  = true;
+    btnQuit.disabled  = false;
+    startBtn.disabled = true;
+  }
+}
+
+// ── SSE 구독 ──────────────────────────────────────────────────────────────────
+function subscribeSSE() {
+  if (es) { es.close(); es = null; }
+  es = new EventSource('/stream');
+
+  es.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'ping') return;
+
+    if (msg.type === 'login_required') {
+      document.getElementById('loginBanner').style.display = 'flex';
+      setSessionState('login_wait');
+
+    } else if (msg.type === 'session_ready') {
+      document.getElementById('loginBanner').style.display = 'none';
+      setSessionState('ready');
+      document.getElementById('cancelBtn').style.display = 'none';
+      document.getElementById('startBtn').disabled = false;
+
+    } else if (msg.type === 'session_closed') {
+      setSessionState('idle');
+      document.getElementById('loginBanner').style.display = 'none';
+      document.getElementById('cancelBtn').style.display = 'none';
+      document.getElementById('progressWrap').style.display = 'none';
+      log('세션이 종료되었습니다.', 'log-warn');
+
+    } else if (msg.type === 'progress') {
+      document.getElementById('progressWrap').style.display = 'block';
+      const pct = Math.round(msg.current / msg.total * 100);
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressPct').textContent  = pct + '%';
+      document.getElementById('progressText').textContent =
+        `[${msg.current}/${msg.total}] ${msg.date} 조회 중...`;
+
+    } else if (msg.type === 'row') {
+      addRow(msg.row);
+
+    } else if (msg.type === 'log') {
+      log(msg.text, 'log-' + (msg.cls || 'info'));
+
+    } else if (msg.type === 'done') {
+      log(`조회 완료 — 총 ${msg.count}건`, 'log-ok');
+      document.getElementById('progressText').textContent = `완료 (${msg.count}건)`;
+      // 세션은 유지 → ready 상태로
+      setSessionState('ready');
+      document.getElementById('cancelBtn').style.display = 'none';
+      document.getElementById('startBtn').disabled = false;
+
+    } else if (msg.type === 'cancelled') {
+      log(`조회 취소 — ${msg.saved ?? 0}건 저장`, 'log-warn');
+      document.getElementById('progressText').textContent = '취소됨';
+      setSessionState('ready');
+      document.getElementById('cancelBtn').style.display = 'none';
+      document.getElementById('startBtn').disabled = false;
+      const cb = document.getElementById('cancelBtn');
+      cb.textContent = '■ 조회 취소'; cb.disabled = false;
+
+    } else if (msg.type === 'error') {
+      log('오류: ' + msg.text, 'log-err');
+      setSessionState('idle');
+      document.getElementById('cancelBtn').style.display = 'none';
+    }
+  };
+
+  es.onerror = () => { /* SSE 스트림은 유지 */ };
+}
+
+// ── 세션 제어 ─────────────────────────────────────────────────────────────────
+async function openBrowser() {
+  subscribeSSE();   // 먼저 SSE 구독 → 로그를 놓치지 않음
+  log('브라우저 열기 요청 중...', 'log-info');
+  document.getElementById('btnOpenBrowser').disabled = true;
+  const res  = await fetch('/open_browser', {method:'POST'});
+  const data = await res.json();
+  if (data.error) {
+    alert(data.error);
+    document.getElementById('btnOpenBrowser').disabled = false;
+    return;
+  }
+}
+
+async function loginComplete() {
+  document.getElementById('loginBanner').style.display = 'none';
+  await fetch('/login_complete', {method:'POST'});
+  log('로그인 완료 — 세션 활성화', 'log-ok');
+}
+
+async function quitBrowser() {
+  if (!confirm('세션을 종료하시겠습니까? Chrome 창이 닫힙니다.')) return;
+  await fetch('/quit_browser', {method:'POST'});
+}
+
+// ── 조회 제어 ─────────────────────────────────────────────────────────────────
+async function startSearch() {
+  const origin = document.getElementById('originCode').value ||
+                 document.getElementById('originInput').value.trim().toUpperCase().slice(0,3);
+  const dest   = document.getElementById('destCode').value ||
+                 document.getElementById('destInput').value.trim().toUpperCase().slice(0,3);
+
+  if (!origin || !dest) { alert('출발지와 도착지를 선택해 주세요.'); return; }
+
+  // 결과 초기화
+  document.getElementById('resultBody').innerHTML = '';
+  document.getElementById('logBox').innerHTML = '';
+  document.getElementById('logBox').style.display = 'none';
+  document.getElementById('progressWrap').style.display = 'none';
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('resultWrap').style.display = 'none';
+  rowCount = 0;
+
+  const payload = {
+    origin,
+    dest,
+    start_date: document.getElementById('startDate').value,
+    end_date:   document.getElementById('endDate').value,
+  };
+
+  const res  = await fetch('/start', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (data.error) { alert(data.error); return; }
+
+  setSessionState('searching');
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('cancelBtn').style.display = 'inline-flex';
+}
+
+async function cancelSearch() {
+  document.getElementById('cancelBtn').disabled = true;
+  document.getElementById('cancelBtn').textContent = '취소 중...';
+  await fetch('/cancel', {method:'POST'});
+}
+
+// ── 결과 테이블 ───────────────────────────────────────────────────────────────
+function seatCell(v) {
+  if (v === 'O') return `<td class="seat-o">O</td>`;
+  if (v === 'X') return `<td class="seat-x">X</td>`;
+  return `<td class="seat-dash">-</td>`;
+}
+
+function addRow(row) {
+  const tbody = document.getElementById('resultBody');
+  const tr    = document.createElement('tr');
+  tr.innerHTML =
+    `<td>${row.date}</td><td>${row.origin}</td><td>${row.dest}</td>` +
+    `<td><b>${row.flight_no||'-'}</b></td><td>${row.dep_time||'-'}</td>` +
+    seatCell(row.economy) + seatCell(row.business) + seatCell(row.upgrade);
+  tbody.appendChild(tr);
+  rowCount++;
+  document.getElementById('resultCount').textContent = rowCount + '건';
+  document.getElementById('resultWrap').style.display = 'block';
+}
+
+function log(text, cls='') {
+  const box  = document.getElementById('logBox');
+  box.style.display = 'block';
+  const line = document.createElement('div');
+  line.className   = 'log-line ' + cls;
+  line.textContent = '[' + new Date().toLocaleTimeString('ko-KR') + '] ' + text;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+function downloadCsv() { window.location.href = '/download'; }
+
+// 초기 상태 동기화 + 2초마다 폴링
+async function syncState() {
+  try {
+    const res  = await fetch('/session_status');
+    const data = await res.json();
+    const s    = data.state || 'idle';
+    if (s !== sessionState) {
+      setSessionState(s);
+      if (s === 'login_wait') {
+        document.getElementById('loginBanner').style.display = 'flex';
+      } else {
+        document.getElementById('loginBanner').style.display = 'none';
+      }
+    }
+  } catch(e) {}
+}
+
+(async () => {
+  await syncState();
+  subscribeSSE();
+  setInterval(syncState, 2000);
+})();
+</script>
+</body>
+</html>
